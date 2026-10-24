@@ -1,0 +1,75 @@
+/* Il cursore nativo rimane disponibile fino al primo movimento del mouse. */
+.creative-cursor{
+  --cursor-color:#ffb4a4;
+  --cursor-fill:rgba(255,180,164,.2);
+  --cursor-glow:rgba(255,139,118,.65);
+  --cursor-edge:#392326;
+  position:fixed;
+  left:0;
+  top:0;
+  width:0;
+  height:0;
+  z-index:2147483647;
+  pointer-events:none!important;
+  user-select:none;
+  opacity:0;
+  visibility:hidden;
+  transform:translate3d(-100px,-100px,0);
+  contain:layout style;
+  view-transition-name:none;
+}
+.creative-cursor.is-visible{opacity:1;visibility:visible}
+.creative-cursor__dot{
+  position:absolute;
+  left:0;
+  top:0;
+  width:16px;
+  height:16px;
+  transform:translate(-50%,-50%);
+  border-radius:50%;
+  background:var(--cursor-color);
+  border:1px solid var(--cursor-edge);
+  box-shadow:0 0 8px var(--cursor-glow),0 0 19px rgba(255,153,132,.28);
+  transition:width .2s cubic-bezier(.2,.8,.2,1),height .2s cubic-bezier(.2,.8,.2,1),background-color .2s,border-color .2s,box-shadow .2s;
+}
+.creative-cursor__dot:after{
+  content:'';
+  position:absolute;
+  width:3px;
+  height:3px;
+  left:50%;
+  top:50%;
+  transform:translate(-50%,-50%);
+  border-radius:50%;
+  background:var(--cursor-color);
+}
+.creative-cursor[data-state="open"] .creative-cursor__dot{
+  width:44px;
+  height:44px;
+  background:var(--cursor-fill);
+  border-color:var(--cursor-color);
+  box-shadow:0 0 0 1px var(--cursor-edge),0 0 25px var(--cursor-glow),inset 0 0 14px var(--cursor-fill);
+}
+.creative-cursor[data-state="control"] .creative-cursor__dot{width:12px;height:12px;box-shadow:0 0 7px var(--cursor-glow),0 0 13px var(--cursor-fill)}
+.creative-cursor[data-state="control"] .creative-cursor__dot:after{width:3px;height:3px}
+.creative-cursor[data-state="drag"] .creative-cursor__dot{width:23px;height:23px;background:var(--cursor-fill);border-color:var(--cursor-color);box-shadow:0 0 0 1px var(--cursor-edge),0 0 20px var(--cursor-glow)}
+.creative-cursor.is-pressed:not([data-state="drag"]) .creative-cursor__dot{width:8px;height:8px}
+body.paper .creative-cursor{
+  --cursor-color:#963f39;
+  --cursor-fill:rgba(150,63,57,.13);
+  --cursor-glow:rgba(216,106,88,.35);
+  --cursor-edge:#fff4e7;
+}
+.creative-cursor.in-lightbox{
+  --cursor-color:#ffb4a4;
+  --cursor-fill:rgba(255,180,164,.2);
+  --cursor-glow:rgba(255,139,118,.65);
+  --cursor-edge:#392326;
+}
+@media(any-hover:hover) and (any-pointer:fine){
+  html.cursor-enabled:not(.cursor-native),
+  html.cursor-enabled:not(.cursor-native) *,
+  html.cursor-enabled:not(.cursor-native) dialog::backdrop{cursor:none!important}
+}
+@media(prefers-reduced-motion:reduce){.creative-cursor__dot{transition:none}}
+@media(forced-colors:active){.creative-cursor{display:none!important}}

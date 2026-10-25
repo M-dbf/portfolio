@@ -16,6 +16,48 @@
   let galleryResize = null;
   let galleryCleanup = null;
   const filterAnimations = new Map();
+  const posterCache = new Map();
+  let postersStarted = false;
+  let backdropVersion = 0;
+  let lastBackdrop = data.sfondoHome;
+  function preparePoster(src, priority = 'low') {
+    if (!src) return Promise.resolve(null);
+    const cached = posterCache.get(src);
+    if (cached) {
+      if (priority === 'high') cached.image.fetchPriority = 'high';
+      return cached.promise;
+    }
+    const image = new Image();
+    image.decoding = 'async';
+    image.fetchPriority = priority;
+    const entry = {image,ready:false,promise:null};
+    posterCache.set(src,entry);
+    image.src = src;
+    entry.promise = image.decode().then(() => {entry.ready=true;return image;}).catch(() => {posterCache.delete(src);return null;});
+    return entry.promise;
+  }
+  function prepareScenePosters(scene) {
+    preparePoster(selectedMedia(scene).poster,'high');
+    if (postersStarted) return;
+    postersStarted = true;
+    // Solo immagini (circa 1,6 MB), tre alla volta: i video non vengono scaricati in anticipo.
+    const queue = [...new Set([...scene.media,...data.scene.flatMap(s=>s.media)].map(item=>item.poster).filter(Boolean))];
+    const worker = async () => { while (queue.length) await preparePoster(queue.shift()); };
+    for (let i=0;i<3;i++) worker();
+  }
+  function updateBackdrop(scene, src) {
+    const host = main.querySelector('.scene-backdrop');
+    const version = ++backdropVersion;
+    preparePoster(src,'high').then(image => {
+      if (!image || version!==backdropVersion || activeScene!==scene || !host?.isConnected) return;
+      const next = image.cloneNode();
+      next.className = 'home-backdrop';
+      next.alt = '';
+      next.draggable = false;
+      host.replaceChildren(next);
+      lastBackdrop = src;
+    });
+  }
   const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const number = index => String(index + 1).padStart(2, '0');
   const years = data.scene.map(scene=>Number(scene.anno));
@@ -90,6 +132,8 @@
     document.querySelectorAll('[data-filter]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.filter === category)));
   }
   function draw() {
+    const previousBackdrop = main.querySelector('.scene-backdrop > img, .home > .home-backdrop');
+    backdropVersion++;
     document.querySelector('video')?.pause();
     mediaResize?.disconnect();
     mediaResize = null;
@@ -108,7 +152,12 @@
     document.body.classList.toggle('paper', !!currentRoute && !scene);
     document.body.classList.toggle('scene-open', !!scene);
     document.querySelector('.scene-home-link').hidden = !scene;
-    main.innerHTML = scene ? `<div class="scene-backdrop" inert aria-hidden="true">${imageTag({immagine:selectedMedia(scene).poster,alt:scene.alt},'class="home-backdrop"')}</div>${scenePage(scene)}` : currentRoute === 'immagini' ? gallery() : currentRoute === 'profilo' ? profile() : currentRoute === 'contatti' ? contact() : home();
+    main.innerHTML = scene ? `<div class="scene-backdrop" inert aria-hidden="true">${imageTag({immagine:lastBackdrop,alt:''},'class="home-backdrop"')}</div>${scenePage(scene)}` : currentRoute === 'immagini' ? gallery() : currentRoute === 'profilo' ? profile() : currentRoute === 'contatti' ? contact() : home();
+    if (scene) {
+      if (previousBackdrop?.complete && previousBackdrop.naturalWidth) main.querySelector('.scene-backdrop').replaceChildren(previousBackdrop);
+      prepareScenePosters(scene);
+      updateBackdrop(scene,selectedMedia(scene).poster);
+    }
     if (preparedVideo) {
       if (scene?.id === preparedVideo.id) main.querySelector('video').replaceWith(preparedVideo.element);
       else preparedVideo.element.pause();
@@ -132,20 +181,16 @@
   function setupGallery() {
     const gallery = main.querySelector('.gallery');
     const top = main.querySelector('.gallery-top');
-    let idle;
     const onScroll = () => {
-      clearTimeout(idle);
-      top.classList.remove('is-visible');
-      top.tabIndex = -1;
-      top.hidden = window.scrollY < Math.min(450,innerHeight*.65);
-      if (!top.hidden) idle = setTimeout(() => {
-        top.classList.add('is-visible');
-        top.tabIndex = 0;
-      },240);
+      const visible = window.scrollY > 2;
+      top.hidden = !visible;
+      top.classList.toggle('is-visible',visible);
+      top.tabIndex = visible ? 0 : -1;
     };
     window.addEventListener('scroll',onScroll,{passive:true});
     top.addEventListener('click',()=>window.scrollTo({top:0,behavior:motion.matches ? 'instant' : 'smooth'}));
-    galleryCleanup = () => { clearTimeout(idle);window.removeEventListener('scroll',onScroll); };
+    galleryCleanup = () => window.removeEventListener('scroll',onScroll);
+    onScroll();
     let previousWidth = 0;
     const fit = () => {
       gallery.querySelectorAll('.gallery-photos .gallery-item').forEach(item => {
@@ -182,6 +227,25 @@
     const canvas = video.closest('.media-canvas');
     const screen = video.parentElement;
     const status = main.querySelector('#video-message');
+    const cover = document.createElement('img');
+    cover.className = 'video-cover';
+    cover.alt = '';
+    cover.setAttribute('aria-hidden','true');
+    cover.draggable = false;
+    cover.src = posterCache.get(selectedMedia(scene).poster)?.ready ? selectedMedia(scene).poster : lastBackdrop;
+    cover.hidden = video.readyState>=2;
+    screen.append(cover);
+    let clipVersion = 0;
+    let videoFrame = null;
+    const revealVideo = () => {
+      if (video.readyState<2) return;
+      const version = clipVersion;
+      const reveal = () => { if (version===clipVersion && video.isConnected && video.readyState>=2) cover.hidden=true; };
+      if (video.requestVideoFrameCallback && !video.paused) {
+        if (videoFrame!==null) video.cancelVideoFrameCallback(videoFrame);
+        videoFrame = video.requestVideoFrameCallback(()=>{videoFrame=null;reveal();});
+      } else requestAnimationFrame(()=>requestAnimationFrame(reveal));
+    };
     const fit = () => {
       const ratio = video.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : selectedMedia(scene).rapporto || 16/9;
       const width = Math.min(canvas.clientWidth, canvas.clientHeight * ratio);
@@ -197,7 +261,8 @@
     mediaResize = new ResizeObserver(fit);
     mediaResize.observe(canvas);
     video.addEventListener('loadedmetadata', fit);
-    video.addEventListener('playing', () => { status.hidden = true; });
+    video.addEventListener('loadeddata',revealVideo);
+    video.addEventListener('playing', () => { status.hidden = true;revealVideo(); });
     video.addEventListener('error', () => {
       status.hidden = false;
       status.textContent = 'Impossibile riprodurre questo estratto.';
@@ -205,6 +270,13 @@
     // Conserva lo stesso lettore: volume, audio e schermo intero restano coerenti tra le clip.
     chooseMedia = (index, withAudio = false) => {
       const item = scene.media[index];
+      const version = ++clipVersion;
+      if (videoFrame!==null) { video.cancelVideoFrameCallback(videoFrame);videoFrame=null; }
+      // Mantieni un fermo immagine già pronto fino al primo fotogramma della nuova clip.
+      cover.hidden = false;
+      preparePoster(item.poster,'high').then(image=>{
+        if (image && version===clipVersion && cover.isConnected) cover.src=image.src;
+      });
       mediaChoices.set(scene.id,index);
       main.querySelectorAll('[data-media-index]').forEach(button => {
         button.setAttribute('aria-pressed',String(Number(button.dataset.mediaIndex) === index));
@@ -213,7 +285,7 @@
       video.poster = item.poster;
       video.src = item.src;
       video.setAttribute('aria-label',`Video: ${scene.titolo}, estratto ${index+1}`);
-      main.querySelector('.scene-backdrop img').src = item.poster;
+      updateBackdrop(scene,item.poster);
       video.load();
       if (withAudio) {
         video.muted = false;
@@ -225,6 +297,7 @@
     video.addEventListener('ended', () => {if (video.isConnected) chooseMedia?.(((mediaChoices.get(scene.id) || 0) + 1) % scene.media.length);});
     fit();
     play();
+    revealVideo();
   }
   let transitionScene = null;
   async function navigate() {
@@ -262,6 +335,7 @@
     if (sceneLink && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
       const scene = data.scene.find(s => s.id === sceneLink.hash.slice(7));
       if (scene && sceneLink.hash !== location.hash) {
+        prepareScenePosters(scene);
         preparedVideo?.element.pause();
         const item = selectedMedia(scene);
         if (item.tipo === 'video') {

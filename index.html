@@ -15,10 +15,12 @@
   <link rel="stylesheet" href="movimento.css">
   <link rel="stylesheet" href="cursore.css">
   <link rel="stylesheet" href="portfolio.css">
+  <link rel="stylesheet" href="cv.css">
   <script src="contenuti.js" defer></script>
   <script src="video.config.js" defer></script>
   <script src="media.js" defer></script>
   <script src="app.js" defer></script>
+  <script src="cv.js" defer></script>
   <script src="cursore.js" defer></script>
 </head>
 <body>
@@ -41,6 +43,12 @@
     <button class="lightbox-close" aria-label="Chiudi immagine"><span aria-hidden="true">×</span></button>
     <div class="lightbox-viewer"><div class="image-frame"><img alt=""></div></div>
     <p></p>
+  </dialog>
+  <dialog class="cv-dialog" aria-label="Curriculum di Michela De Buono Filippelli" aria-describedby="cv-help">
+    <div class="cv-topline"><span>CURRICULUM VITAE</span><button class="cv-close" aria-label="Chiudi curriculum"><span aria-hidden="true">×</span></button></div>
+    <div class="cv-viewport"><button class="cv-sheet" aria-label="Ingrandisci la pagina del curriculum" aria-describedby="cv-help"><img alt="" draggable="false"></button></div>
+    <div class="cv-bottom"><p id="cv-help">Clicca per ingrandire · X o sfondo per chiudere</p><nav class="cv-pages" aria-label="Pagine del curriculum"><button data-cv-page="-1" aria-label="Pagina precedente">←</button><span aria-live="polite"></span><button data-cv-page="1" aria-label="Pagina successiva">→</button></nav></div>
+    <div class="sr-only cv-transcript"></div>
   </dialog>
   <noscript>Per esplorare questo portfolio, abilita JavaScript nelle impostazioni del browser.</noscript>
 </body>

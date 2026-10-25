@@ -40,10 +40,10 @@
     cursor.classList.toggle('is-visible',!native && !!hit);
     if (native || !hit) return;
     const dragging = !!document.querySelector('.scene-card.is-dragging');
-    const opensImage = !!hit.closest('a.scene-card,button[data-enlarge]');
+    const opensImage = !!hit.closest('a.scene-card,button[data-enlarge],[data-open-cv],.cv-dialog:not(.is-zoomed) .cv-sheet');
     const sceneContent = 'a,button,video,.screen,input,select,textarea,summary,[role="button"],h1,h2,p,dt,dd,.eyebrow,.media-strip>span,.scene-pagination-mark';
     const sceneBlank = document.body.classList.contains('scene-open') && !hit.closest(sceneContent);
-    const control = !!hit.closest('a,button,label.file-label,summary,[role="button"],input[type="file"]') || sceneBlank;
+    const control = !!hit.closest('a,button,label.file-label,summary,[role="button"],input[type="file"],.cv-dialog') || sceneBlank;
     cursor.dataset.state = dragging ? 'drag' : opensImage ? 'open' : control ? 'control' : 'default';
   }
 

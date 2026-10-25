@@ -14,6 +14,8 @@
   let chooseMedia = null;
   let preparedVideo = null;
   let galleryResize = null;
+  let galleryCleanup = null;
+  const filterAnimations = new Map();
   const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const number = index => String(index + 1).padStart(2, '0');
   const years = data.scene.map(scene=>Number(scene.anno));
@@ -45,16 +47,46 @@
   function gallery() {
     const item = (s,i) => `<figure class="gallery-item${s.tecnica ? ' gallery-work' : ''}"><button data-enlarge="${i}" aria-label="Ingrandisci ${escape(s.titolo)}, immagine ${i+1}"><span class="gallery-image image-frame" data-rotation="${s.rotazione || ''}">${imageTag(s,'loading="lazy"',s.tecnica ? '(max-width:560px) 86vw, 44vw' : '(max-width:560px) 86vw, (max-width:1199px) 44vw, 29vw')}</span></button><figcaption><span class="gallery-caption-title">${escape(s.titolo)}${s.tecnica ? `<small>${escape(s.tecnica)}</small>` : ''}</span><span>${s.anno || 'OPERA'}</span></figcaption></figure>`;
     const group = works => data.galleria.map((s,i) => Boolean(s.tecnica) === works ? item(s,i) : '').join('');
-    return `<section class="page-shell"><p class="eyebrow">GALLERIA</p><h1 class="page-title" tabindex="-1">Fotografie <em>e opere.</em></h1><p class="page-intro">Una selezione di immagini e lavori, tra scena, colore e segno. Seleziona un’immagine per osservarla da vicino.</p><div class="gallery"><div class="gallery-photos">${group(false)}</div><div class="gallery-works">${group(true)}</div></div>${footer()}</section>`;
+    return `<section class="page-shell"><p class="eyebrow">GALLERIA</p><h1 class="page-title" tabindex="-1">Fotografie <em>e opere.</em></h1><p class="page-intro">Una selezione di immagini e lavori, tra scena, colore e segno. Seleziona un’immagine per osservarla da vicino.</p><div class="gallery"><div class="gallery-photos">${group(false)}</div><div class="gallery-works">${group(true)}</div></div><button class="gallery-top" hidden tabindex="-1" aria-label="Torna all’inizio della galleria">Torna su <span aria-hidden="true">↑</span></button>${footer()}</section>`;
   }
   function profile() {
-    return `<section class="page-shell"><div class="profile-layout"><div class="profile-text"><p class="eyebrow">CHI SONO</p><h1 class="page-title" tabindex="-1">Michela.</h1><div class="profile-copy"><p class="profile-lead">Attrice e regista.</p>${data.biografia.split(/(?=Il mio )/).map(paragraph=>`<p>${escape(paragraph.trim())}</p>`).join('')}</div><a class="text-link" href="#contatti">Lavoriamo insieme <span aria-hidden="true">↗</span></a></div><img class="profile-image" width="${data.ritrattoDimensioni?.[0] || 1469}" height="${data.ritrattoDimensioni?.[1] || 2200}" decoding="async" src="${escape(data.ritratto)}" alt="Ritratto di Michela De Buono Filippelli"></div>${footer()}</section>`;
+    return `<section class="page-shell"><div class="profile-layout"><div class="profile-text"><p class="eyebrow">CHI SONO</p><h1 class="page-title" tabindex="-1">Michela.</h1><div class="profile-copy"><p class="profile-lead">Attrice e regista.</p>${data.biografia.split(/(?=Il mio )/).map(paragraph=>`<p>${escape(paragraph.trim())}</p>`).join('')}</div><div class="profile-actions"><button class="text-link" data-open-cv>IL MIO CV <span aria-hidden="true">↗</span></button><a class="text-link" href="#contatti">Lavoriamo insieme <span aria-hidden="true">↗</span></a></div></div><img class="profile-image" width="${data.ritrattoDimensioni?.[0] || 1469}" height="${data.ritrattoDimensioni?.[1] || 2200}" decoding="async" src="${escape(data.ritratto)}" alt="Ritratto di Michela De Buono Filippelli"></div>${footer()}</section>`;
   }
   function contact() {
     return `<section class="page-shell contact-page"><div class="contact-main"><p class="eyebrow">CONTATTI</p><h1 class="page-title" tabindex="-1">Ogni incontro,<br><em>una possibilità.</em></h1><p class="page-intro">Per un progetto, una collaborazione,<br>o una conversazione ancora da cominciare.</p>${data.email ? `<a class="contact-link" href="mailto:${escape(data.email)}">${escape(data.email)} ↗</a>` : '<p class="contact-empty">Il tuo indirizzo email troverà posto qui.<br>Questa prima proposta attende i tuoi contatti e i tuoi collegamenti professionali.</p>'}<a class="text-link contact-return" href="#">Torna alle scene <span aria-hidden="true">↗</span></a></div>${footer()}</section>`;
   }
-  function applyFilters() {
-    document.querySelectorAll('.scene-card').forEach(card => {card.hidden = category !== 'Tutti' && category !== 'Tutte' && data.scene.find(s => s.id === card.dataset.scene).categoria !== category;});
+  function applyFilters(animate = false) {
+    document.querySelectorAll('.scene-card').forEach((card,index) => {
+      const hide = category !== 'Tutti' && category !== 'Tutte' && data.scene.find(s => s.id === card.dataset.scene).categoria !== category;
+      const previous = filterAnimations.get(card);
+      if (!previous && card.hidden === hide) return;
+      // Conserva la posizione corrente anche quando si cambia filtro velocemente.
+      const current = getComputedStyle(card);
+      const from = {translate:current.translate,opacity:current.opacity};
+      previous?.cancel();
+      filterAnimations.delete(card);
+      card.style.removeProperty('animation-play-state');
+      card.inert = hide;
+      if (!animate || motion.matches) { card.hidden = hide; return; }
+      const wasHidden = card.hidden;
+      card.hidden = false;
+      const base = getComputedStyle(card).translate;
+      const direction = index % 2 ? -1 : 1;
+      const outside = `${direction*(innerWidth+card.offsetWidth)}px ${index % 2 ? -24 : 24}px`;
+      card.style.animationPlayState = 'paused';
+      const animation = card.animate([
+        wasHidden ? {translate:outside,opacity:0} : from,
+        {translate:hide ? outside : base,opacity:hide ? 0 : 1}
+      ],{duration:650,delay:wasHidden ? (index%4)*25 : 0,easing:'cubic-bezier(.22,.7,.2,1)',fill:'both'});
+      filterAnimations.set(card,animation);
+      animation.onfinish = () => {
+        if (filterAnimations.get(card) !== animation) return;
+        card.hidden = hide;
+        animation.cancel();
+        card.style.removeProperty('animation-play-state');
+        filterAnimations.delete(card);
+      };
+    });
     document.querySelectorAll('[data-filter]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.filter === category)));
   }
   function draw() {
@@ -64,6 +96,11 @@
     chooseMedia = null;
     galleryResize?.disconnect();
     galleryResize = null;
+    galleryCleanup?.();
+    galleryCleanup = null;
+    filterAnimations.forEach(animation=>animation.cancel());
+    filterAnimations.clear();
+    document.querySelectorAll('dialog[open]').forEach(dialog=>dialog.close());
     const route = location.hash.slice(1);
     const scene = route.startsWith('scena/') && data.scene.find(s => s.id === route.slice(6));
     activeScene = scene || null;
@@ -94,6 +131,21 @@
   }
   function setupGallery() {
     const gallery = main.querySelector('.gallery');
+    const top = main.querySelector('.gallery-top');
+    let idle;
+    const onScroll = () => {
+      clearTimeout(idle);
+      top.classList.remove('is-visible');
+      top.tabIndex = -1;
+      top.hidden = window.scrollY < Math.min(450,innerHeight*.65);
+      if (!top.hidden) idle = setTimeout(() => {
+        top.classList.add('is-visible');
+        top.tabIndex = 0;
+      },240);
+    };
+    window.addEventListener('scroll',onScroll,{passive:true});
+    top.addEventListener('click',()=>window.scrollTo({top:0,behavior:motion.matches ? 'instant' : 'smooth'}));
+    galleryCleanup = () => { clearTimeout(idle);window.removeEventListener('scroll',onScroll); };
     let previousWidth = 0;
     const fit = () => {
       gallery.querySelectorAll('.gallery-photos .gallery-item').forEach(item => {
@@ -244,9 +296,9 @@
     }
     if(event.target.closest('.skip-link')){event.preventDefault();main.focus();main.scrollIntoView();return;}
     const filter = event.target.closest('[data-filter]');
-    if(filter){category=filter.dataset.filter;applyFilters();}
+    if(filter && category!==filter.dataset.filter){category=filter.dataset.filter;applyFilters(true);}
     const view = event.target.closest('[data-view]');
-    if(view){indexMode=view.dataset.view==='index';document.querySelector('.home').classList.toggle('index-mode',indexMode);document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String((b.dataset.view==='index')===indexMode)));}
+    if(view){applyFilters();indexMode=view.dataset.view==='index';document.querySelector('.home').classList.toggle('index-mode',indexMode);document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String((b.dataset.view==='index')===indexMode)));}
     const enlarge = event.target.closest('[data-enlarge]');
     if(enlarge){const photo=data.galleria[Number(enlarge.dataset.enlarge)];dialogPhoto=photo;dialog.querySelector('img').src=photo.immagine;dialog.querySelector('img').alt=photo.alt;dialog.querySelector('.image-frame').dataset.rotation=photo.rotazione || '';dialog.querySelector('p').textContent=[photo.titolo,photo.tecnica || photo.anno].filter(Boolean).join(' / ');dialog.showModal();fitLightbox();}
   });
@@ -272,7 +324,21 @@
   main.addEventListener('pointerleave',()=>{if (!dragState) main.querySelectorAll('.scene-card').forEach(card=>{card.style.removeProperty('--mx');card.style.removeProperty('--my');});});
   let dragState = null;
   let lastDrag = null;
-  main.addEventListener('dragstart', event => { if (event.target.closest('.scene-card')) event.preventDefault(); });
+  let galleryGesture = null;
+  let lastGalleryDrag = null;
+  document.addEventListener('dragstart', event => { if (event.target.closest('img,.scene-card,.gallery-item button')) event.preventDefault(); });
+  document.addEventListener('pointerdown',event => {
+    const button = event.target.closest('.gallery-item button');
+    if (button && event.pointerType!=='touch' && event.button===0) galleryGesture = {button,x:event.clientX,y:event.clientY,moved:false};
+  });
+  document.addEventListener('pointermove',event => {
+    if (galleryGesture && Math.hypot(event.clientX-galleryGesture.x,event.clientY-galleryGesture.y)>6) galleryGesture.moved = true;
+  });
+  document.addEventListener('pointerup',()=>{
+    if (galleryGesture?.moved) lastGalleryDrag = {button:galleryGesture.button,until:performance.now()+500};
+    galleryGesture = null;
+  });
+  document.addEventListener('pointercancel',()=>{galleryGesture=null;});
   main.addEventListener('pointerdown', event => {
     const card = event.target.closest('.scene-card');
     if (!card || currentRoute || indexMode || event.button !== 0 || event.pointerType === 'touch') return;
@@ -326,6 +392,9 @@
   main.addEventListener('pointercancel',finishDrag);
   main.addEventListener('lostpointercapture',finishDrag);
   document.addEventListener('click', event => {
+    if (lastGalleryDrag && performance.now()<lastGalleryDrag.until && event.target.closest('.gallery-item button')===lastGalleryDrag.button) {
+      event.preventDefault();event.stopImmediatePropagation();lastGalleryDrag=null;return;
+    }
     if (lastDrag && performance.now()<lastDrag.until && event.target.closest('.scene-card')===lastDrag.card) {
       event.preventDefault();event.stopImmediatePropagation();lastDrag=null;
     }
